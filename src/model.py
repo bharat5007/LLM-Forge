@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import random
 from .tokenizer import Tokenizer
+from .config import ModelConfig
 
 import sys
 import os
@@ -61,8 +62,8 @@ class MultiHeadAttention(nn.Module):
 class MultiHeadBlock(nn.Module):
     def __init__(self, x_emb, heads_num, masking_enabled=False):
         super().__init__()
-        self.heads = MultiHeadAttention(x_emb, heads_num, masking_enabled)
         self.layer_norm = nn.LayerNorm(x_emb)
+        self.heads = MultiHeadAttention(x_emb, heads_num, masking_enabled)
 
     def forward(self, tokens, encoder_logits=None):
         logits_norm = self.layer_norm(tokens)
@@ -73,93 +74,96 @@ class MultiHeadBlock(nn.Module):
 class FeedFwdBlock(nn.Module):
     def __init__(self, x_emb):
         super().__init__()
+        self.layer_norm = nn.LayerNorm(x_emb)
         self.layer = nn.Sequential(
             nn.Linear(x_emb, 4 * x_emb), nn.GELU(), nn.Linear(4 * x_emb, x_emb)
         )
-        self.layer_norm = nn.LayerNorm(x_emb)
 
     def forward(self, tokens):
-        logits = self.layer(tokens)
-        logits_norm = self.layer_norm(logits)
-        return logits_norm + tokens
+        logits_norm = self.layer_norm(tokens)
+        logits = self.layer(logits_norm)
+        return logits + tokens
 
 
 class DecoderArchitecture(nn.Module):
-    def __init__(self, vocab_size, seq_len, x_emb, heads_num, encoder_num):
+    def __init__(self, emb_size, heads_num):
         super().__init__()
         self.self_attention = MultiHeadBlock(
-            x_emb, heads_num, cross_attention=False, masking_enabled=True
+            emb_size, heads_num, masking_enabled=True
         )
-        self.cross_attention = MultiHeadBlock(x_emb, heads_num, masking_enabled=False)
-        self.feed_fwd = FeedFwdBlock(x_emb)
+        self.feed_fwd = FeedFwdBlock(emb_size)
 
-    def forward(self, x, encoder_hidden):
-        logits = self.self_attention(x)
-        logits = self.cross_attention(logits, encoder_hidden)
+    def forward(self, hidden_states):
+        logits = self.self_attention(hidden_states)
         logits = self.feed_fwd(logits)
         return logits
 
 
 class Decoder(nn.Module):
-    def __init__(
-        self,
-        vocab_size,
-        seq_len,
-        x_emb,
-        heads_num,
-        decoder_num: int = 6,
-        encoder_num: int = 6,
-    ):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
-        self.seq_len = seq_len
-        self.encoder = None
         self.architecture = nn.ModuleList(
             [
-                DecoderArchitecture(vocab_size, seq_len, x_emb, heads_num, encoder_num)
-                for _ in range(decoder_num)
+                DecoderArchitecture(cfg.emb_size, cfg.heads_num)
+                for _ in range(cfg.decoder_num)
             ]
         )
-        self.linear = nn.Linear(x_emb, vocab_size)
-        self.look_up_table = nn.Parameter(torch.randn((vocab_size + 2, x_emb)))
-        self.postional_enc = nn.Parameter(torch.randn((seq_len, x_emb)))
+        self.linear = nn.Linear(cfg.emb_size, cfg.vocab_size)
+        self.look_up_table = nn.Parameter(torch.randn((cfg.vocab_size + 2, cfg.emb_size)))  # [vocab+2, emb_size]
+        self.postional_enc = nn.Parameter(torch.randn((cfg.seq_len, cfg.emb_size)))         # [seq_len, emb_size]
+        self.layer_norm = nn.LayerNorm(cfg.emb_size)
 
     def forward(self, tokens, target=None):
-        encoder_hidden = self.encoder.encode(tokens)
         loss = None
-        B, T = tokens.shape
-        x = self.look_up_table[tokens] + self.postional_enc[torch.arange(T)]
+        B, T = tokens.shape                                                                 # [32, seq_len]
+
+        # Encoding -> tokenizer + postional
+        hidden_states = self.look_up_table[tokens] + self.postional_enc[torch.arange(T)]    # [32, seq_len, emb_size]
 
         for decoder in self.architecture:
-            x = decoder(x, encoder_hidden)
+            hidden_states = decoder(hidden_states)
 
-        x = self.linear(x)
+        hidden_states = self.layer_norm(hidden_states)
+        logits = self.linear(hidden_states)
 
         if target is not None:
             target = torch.tensor(target)
-            B, T, C = x.shape
-            loss = F.cross_entropy(x.view(B * T, C), target.view(B * T))
+            B, T, C = logits.shape
+            loss = F.cross_entropy(logits.view(B * T, C), target.view(B * T))
 
-        return x, loss
+        return logits, loss
 
-    def fit(self, tokens, epochs=100, batch_size=32):
+    def fit(self, tokens: list, cfg: ModelConfig):
+        # tokens = list of numbers, text/document is passed through tokenizer and tokenzier wrods ko break karke hrr new word ko ek number assign karta ha
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-3)
-        if len(tokens) % (self.seq_len + 1) != 0:
-            pad = self.seq_len + 1 - len(tokens) % (self.seq_len + 1)
+
+        # we have to make sure len(tokens) % self.seq_len = 0
+        if len(tokens) % (cfg.seq_len + 1) != 0:
+            pad = cfg.seq_len + 1 - len(tokens) % (cfg.seq_len + 1)
             tokens.extend([0] * pad)
 
+        # tokens ko torch ma convert kr rhe ha
         tokens = torch.tensor(tokens)
-        tokens = tokens.view(-1, self.seq_len + 1)
-        x_chunks = tokens[:, :-1]
-        y_chunks = tokens[:, 1:]
 
-        for epoch in range(epochs):
+        # converting it into a matrix of shape [n, seq_len+1]
+        tokens = tokens.view(-1, cfg.seq_len + 1)          # [n, seq_len + 1]
+
+        # preparing x and y chunks
+        x_chunks = tokens[:, :-1]                           # [n, seq_len]
+        y_chunks = tokens[:, 1:]                            # [n, seq_len]
+
+        for epoch in range(cfg.epochs):
+
+            # will generate a random permutation of length x[0], for eg. [5,2,3,0,1,4]
             perm = torch.randperm(x_chunks.size(0))
+
+            # mixing up x and y using same permutation
             x = x_chunks[perm]
             y = y_chunks[perm]
 
-            i = random.randint(0, len(x) - 1 - batch_size)
-            x_batch = x[i : i + batch_size]
-            y_batch = y[i : i + batch_size]
+            i = random.randint(0, len(x) - 1 - cfg.batch_size)
+            x_batch = x[i : i + cfg.batch_size]                 # [32, seq_len]
+            y_batch = y[i : i + cfg.batch_size]                 # [32, seq_len]
 
             output, loss = self.forward(x_batch, y_batch)
             loss.backward()
