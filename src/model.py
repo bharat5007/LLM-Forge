@@ -18,11 +18,11 @@ tokens = tokenizer.encode(text)
 
 
 class Head(nn.Module):
-    def __init__(self, x_emb, head_emb, masking_enabled=False):
+    def __init__(self, emb_size, head_emb, masking_enabled=False):
         super().__init__()
-        self.key = nn.Linear(x_emb, head_emb)
-        self.query = nn.Linear(x_emb, head_emb)
-        self.value = nn.Linear(x_emb, head_emb)
+        self.key = nn.Linear(emb_size, head_emb)
+        self.query = nn.Linear(emb_size, head_emb)
+        self.value = nn.Linear(emb_size, head_emb)
         self.masking_enabled = masking_enabled
 
     def forward(self, x):
@@ -44,11 +44,14 @@ class Head(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, x_emb, heads_num, masking_enabled=False):
+    def __init__(self, emb_size, heads_num, masking_enabled=False):
         super().__init__()
-        self.proj = nn.Linear(x_emb, x_emb)
+        self.proj = nn.Linear(emb_size, emb_size)
         self.heads = nn.ModuleList(
-            [Head(x_emb, x_emb // heads_num, masking_enabled) for _ in range(heads_num)]
+            [
+                Head(emb_size, emb_size // heads_num, masking_enabled)
+                for _ in range(heads_num)
+            ]
         )
 
     def forward(self, x, encoder_logits=None):
@@ -60,23 +63,25 @@ class MultiHeadAttention(nn.Module):
 
 
 class MultiHeadBlock(nn.Module):
-    def __init__(self, x_emb, heads_num, masking_enabled=False):
+    def __init__(self, emb_size, heads_num, masking_enabled=False):
         super().__init__()
-        self.layer_norm = nn.LayerNorm(x_emb)
-        self.heads = MultiHeadAttention(x_emb, heads_num, masking_enabled)
+        self.layer_norm = nn.RMSNorm(emb_size)
+        self.heads = MultiHeadAttention(emb_size, heads_num, masking_enabled)
 
     def forward(self, tokens, encoder_logits=None):
         logits_norm = self.layer_norm(tokens)
         logits = self.heads(logits_norm, encoder_logits)
-        return logits + tokens
+        return logits + tokens  # [32, seq_len, emb_size]
 
 
 class FeedFwdBlock(nn.Module):
-    def __init__(self, x_emb):
+    def __init__(self, emb_size):
         super().__init__()
-        self.layer_norm = nn.LayerNorm(x_emb)
+        self.layer_norm = nn.RMSNorm(emb_size)
         self.layer = nn.Sequential(
-            nn.Linear(x_emb, 4 * x_emb), nn.GELU(), nn.Linear(4 * x_emb, x_emb)
+            nn.Linear(emb_size, 4 * emb_size),
+            nn.GELU(),
+            nn.Linear(4 * emb_size, emb_size),
         )
 
     def forward(self, tokens):
@@ -88,15 +93,13 @@ class FeedFwdBlock(nn.Module):
 class DecoderArchitecture(nn.Module):
     def __init__(self, emb_size, heads_num):
         super().__init__()
-        self.self_attention = MultiHeadBlock(
-            emb_size, heads_num, masking_enabled=True
-        )
+        self.self_attention = MultiHeadBlock(emb_size, heads_num, masking_enabled=True)
         self.feed_fwd = FeedFwdBlock(emb_size)
 
     def forward(self, hidden_states):
         logits = self.self_attention(hidden_states)
-        logits = self.feed_fwd(logits)
-        return logits
+        logits = self.feed_fwd(logits)  # logits = [32, seq_len, emb_size]
+        return logits  # [32, seq_len, emb_size]
 
 
 class Decoder(nn.Module):
@@ -109,22 +112,24 @@ class Decoder(nn.Module):
             ]
         )
         self.linear = nn.Linear(cfg.emb_size, cfg.vocab_size)
-        self.look_up_table = nn.Parameter(torch.randn((cfg.vocab_size + 2, cfg.emb_size)))  # [vocab+2, emb_size]
-        self.postional_enc = nn.Parameter(torch.randn((cfg.seq_len, cfg.emb_size)))         # [seq_len, emb_size]
-        self.layer_norm = nn.LayerNorm(cfg.emb_size)
+        self.look_up_table = nn.Parameter(
+            torch.randn((cfg.vocab_size + 2, cfg.emb_size))
+        )
+        self.postional_enc = nn.Parameter(torch.randn((cfg.seq_len, cfg.emb_size)))
+        self.layer_norm = nn.RMSNorm(cfg.emb_size)
 
     def forward(self, tokens, target=None):
         loss = None
-        B, T = tokens.shape                                                                 # [32, seq_len]
+        B, T = tokens.shape  # [32, seq_len]
 
         # Encoding -> tokenizer + postional
-        hidden_states = self.look_up_table[tokens] + self.postional_enc[torch.arange(T)]    # [32, seq_len, emb_size]
+        hidden_states = self.look_up_table[tokens] + self.postional_enc[torch.arange(T)]
 
         for decoder in self.architecture:
             hidden_states = decoder(hidden_states)
 
-        hidden_states = self.layer_norm(hidden_states)
-        logits = self.linear(hidden_states)
+        hidden_states = self.layer_norm(hidden_states)  # [32, seq_len, emb_size]
+        logits = self.linear(hidden_states)  # [32, seq_len, vocab_size]
 
         if target is not None:
             target = torch.tensor(target)
@@ -146,14 +151,13 @@ class Decoder(nn.Module):
         tokens = torch.tensor(tokens)
 
         # converting it into a matrix of shape [n, seq_len+1]
-        tokens = tokens.view(-1, cfg.seq_len + 1)          # [n, seq_len + 1]
+        tokens = tokens.view(-1, cfg.seq_len + 1)  # [n, seq_len + 1]
 
         # preparing x and y chunks
-        x_chunks = tokens[:, :-1]                           # [n, seq_len]
-        y_chunks = tokens[:, 1:]                            # [n, seq_len]
+        x_chunks = tokens[:, :-1]  # [n, seq_len]
+        y_chunks = tokens[:, 1:]  # [n, seq_len]
 
         for epoch in range(cfg.epochs):
-
             # will generate a random permutation of length x[0], for eg. [5,2,3,0,1,4]
             perm = torch.randperm(x_chunks.size(0))
 
@@ -162,8 +166,8 @@ class Decoder(nn.Module):
             y = y_chunks[perm]
 
             i = random.randint(0, len(x) - 1 - cfg.batch_size)
-            x_batch = x[i : i + cfg.batch_size]                 # [32, seq_len]
-            y_batch = y[i : i + cfg.batch_size]                 # [32, seq_len]
+            x_batch = x[i : i + cfg.batch_size]  # [32, seq_len]
+            y_batch = y[i : i + cfg.batch_size]  # [32, seq_len]
 
             output, loss = self.forward(x_batch, y_batch)
             loss.backward()

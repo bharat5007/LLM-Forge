@@ -12,7 +12,6 @@ class ModelConfig:
     decoder_num: int = 6  # number of decoders
     emb_size: int = 512  # embedding size
 
-
     # training parameters
     batch_size: int = 32
     epochs: int = 10000
