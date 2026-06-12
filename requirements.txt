@@ -1,3 +1,4 @@
 regex
 torch
 ruff
+rotary-embedding-torch

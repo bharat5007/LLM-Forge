@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import random
 from .tokenizer import Tokenizer
 from .config import ModelConfig
+from rotary_embedding_torch import RotaryEmbedding
 
 import sys
 import os
@@ -23,12 +24,13 @@ class Head(nn.Module):
         self.key = nn.Linear(emb_size, head_emb)
         self.query = nn.Linear(emb_size, head_emb)
         self.value = nn.Linear(emb_size, head_emb)
+        self.rope = RotaryEmbedding(head_emb)
         self.masking_enabled = masking_enabled
 
     def forward(self, x):
         B, T, C = x.shape
-        q = self.query(x)
-        k = self.key(x)
+        q = self.rope(self.query(x))
+        k = self.rope(self.key(x))
         v = self.value(x)
 
         logits = q @ k.transpose(-2, -1)
@@ -111,7 +113,7 @@ class Decoder(nn.Module):
                 for _ in range(cfg.decoder_num)
             ]
         )
-        self.linear = nn.Linear(cfg.emb_size, cfg.vocab_size)
+        self.linear = nn.SELU(cfg.emb_size, cfg.vocab_size)
         self.look_up_table = nn.Parameter(
             torch.randn((cfg.vocab_size + 2, cfg.emb_size))
         )
