@@ -5,7 +5,7 @@ import random
 from .tokenizer import Tokenizer
 from .config import ModelConfig
 from rotary_embedding_torch import RotaryEmbedding
-from .components import RMSNorm
+from .components import RMSNorm, SwiGLU
 
 import sys
 import os
@@ -83,7 +83,7 @@ class FeedFwdBlock(nn.Module):
         self.layer_norm = RMSNorm(emb_size)
         self.layer = nn.Sequential(
             nn.Linear(emb_size, 4 * emb_size),
-            nn.GELU(),
+            SwiGLU(),
             nn.Linear(4 * emb_size, emb_size),
         )
 
@@ -114,7 +114,7 @@ class Decoder(nn.Module):
                 for _ in range(cfg.decoder_num)
             ]
         )
-        self.linear = nn.SELU(cfg.emb_size, cfg.vocab_size)
+        self.linear = SwiGLU(cfg.emb_size, cfg.vocab_size)
         self.look_up_table = nn.Parameter(
             torch.randn((cfg.vocab_size + 2, cfg.emb_size))
         )
