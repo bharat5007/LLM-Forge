@@ -4,8 +4,7 @@ import torch.nn.functional as F
 import random
 from .tokenizer import Tokenizer
 from .config import ModelConfig
-from rotary_embedding_torch import RotaryEmbedding
-from .components import RMSNorm, SwiGLU
+from .components import RMSNorm, SwiGLU, RoPE
 
 import sys
 import os
@@ -25,7 +24,7 @@ class Head(nn.Module):
         self.key = nn.Linear(emb_size, head_emb)
         self.query = nn.Linear(emb_size, head_emb)
         self.value = nn.Linear(emb_size, head_emb)
-        self.rope = RotaryEmbedding(head_emb)
+        self.rope = RoPE()
         self.masking_enabled = masking_enabled
 
     def forward(self, x):

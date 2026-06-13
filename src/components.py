@@ -1,4 +1,5 @@
 import torch
+import math
 import torch.nn as nn
 
 
@@ -24,3 +25,35 @@ class SwiGLU(nn.Module):
         output = self.layer1(x)
         output = output * torch.sigmoid(output)
         return output * self.layer2(x)
+
+
+class RoPE(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def calculate_rope(self, pos, dim):
+        x = []
+        for i in range(dim):
+            tensor = torch.zeros(dim)
+            if i % 2:
+                theta = pos * (10000 ** (-(i - 1) / dim))
+                tensor[i - 1] = math.sin(theta)
+                tensor[i] = math.cos(theta)
+            else:
+                theta = pos * (10000 ** (-i / dim))
+                tensor[i] = math.cos(theta)
+                tensor[i + 1] = -math.sin(theta)
+
+            x.append(tensor)
+
+        return torch.stack(x)
+
+    def forward(self, x: torch.Tensor):
+        logits = []
+        B, T, C = x.shape
+
+        for i in range(T):
+            rope = self.calculate_rope(i, C)
+            logits.append(x[:, i, :] @ rope)
+
+        return torch.stack(logits, dim=1)
