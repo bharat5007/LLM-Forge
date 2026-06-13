@@ -11,6 +11,9 @@ class ModelConfig:
     heads_num: int = 4  # number of heads in each attentition
     decoder_num: int = 6  # number of decoders
     emb_size: int = 512  # embedding size
+    heads_emb: int = 64
+    kv_heads: int = 4
+    q_heads: int = 16
 
     # training parameters
     batch_size: int = 32

@@ -19,19 +19,42 @@ tokens = tokenizer.encode(text)
 
 
 class Head(nn.Module):
-    def __init__(self, emb_size, head_emb, masking_enabled=False):
+    def __init__(
+        self,
+        emb_size: int,
+        head_emb: int,
+        q_heads: int,
+        kv_heads: int,
+        seq_len: int,
+        masking_enabled: bool = False,
+    ):
         super().__init__()
-        self.key = nn.Linear(emb_size, head_emb)
-        self.query = nn.Linear(emb_size, head_emb)
-        self.value = nn.Linear(emb_size, head_emb)
-        self.rope = RoPE()
+        self.rope = RoPE(seq_len, head_emb)
+        self.q_heads = q_heads
+        self.kv_heads = kv_heads
+        self.head_emb = head_emb
         self.masking_enabled = masking_enabled
+        self.key = nn.Linear(emb_size, head_emb * kv_heads)
+        self.query = nn.Linear(emb_size, head_emb * q_heads)
+        self.value = nn.Linear(emb_size, head_emb * kv_heads)
 
     def forward(self, x):
         B, T, C = x.shape
-        q = self.rope(self.query(x))
-        k = self.rope(self.key(x))
-        v = self.value(x)
+        v = (
+            self.value(x).view(B, T, self.kv_heads, self.head_emb).transpose(1, 2)
+        )  # (B, kv_heads, T, head_emb)
+        k = (
+            self.key(x).view(B, T, self.kv_heads, self.head_emb).transpose(1, 2)
+        )  # (B, kv_heads, T, head_emb)
+        q = (
+            self.query(x).view(B, T, self.q_heads, self.head_emb).transpose(1, 2)
+        )  # (B, q_heads, T, head_emb)
+
+        k = k.repeat_interleave(self.q_heads // self.kv_heads, dim=1)
+        v = v.repeat_interleave(self.q_heads // self.kv_heads, dim=1)
+
+        q = self.rope(q)
+        k = self.rope(k)  # (B, q_heads, T, head_emb)
 
         logits = q @ k.transpose(-2, -1)
         logits = logits / (k.shape[-1] ** 0.5)
@@ -41,38 +64,50 @@ class Head(nn.Module):
             logits = logits.masked_fill(mask == 0, float("-inf"))
 
         logits = F.softmax(logits, dim=-1)
-        logits = logits @ v
-        return logits
+        logits = logits @ v  # (B, q_heads, T, head_emb)
+        logits = logits.transpose(1, 2)  # (B, T, q_heads, head_emb)
+        return logits.contiguous().view(B, T, C)
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, emb_size, heads_num, masking_enabled=False):
+    def __init__(
+        self,
+        emb_size: int,
+        head_emb: int,
+        q_heads: int,
+        kv_heads: int,
+        seq_len: int,
+        masking_enabled: bool = False,
+    ):
         super().__init__()
         self.proj = nn.Linear(emb_size, emb_size)
-        self.heads = nn.ModuleList(
-            [
-                Head(emb_size, emb_size // heads_num, masking_enabled)
-                for _ in range(heads_num)
-            ]
-        )
+        self.head = Head(emb_size, head_emb, q_heads, kv_heads, seq_len, masking_enabled)
 
-    def forward(self, x, encoder_logits=None):
-        logits = torch.cat(
-            [head(x, encoder_logits) for i, head in enumerate(self.heads)], dim=-1
-        )
+    def forward(self, x):
+        logits = self.head(x)
         logits = self.proj(logits)
         return logits
 
 
 class MultiHeadBlock(nn.Module):
-    def __init__(self, emb_size, heads_num, masking_enabled=False):
+    def __init__(
+        self,
+        emb_size: int,
+        head_emb: int,
+        q_heads: int,
+        kv_heads: int,
+        seq_len: int,
+        masking_enabled: bool = False,
+    ):
         super().__init__()
         self.layer_norm = RMSNorm(emb_size)
-        self.heads = MultiHeadAttention(emb_size, heads_num, masking_enabled)
+        self.heads = MultiHeadAttention(
+            emb_size, head_emb, q_heads, kv_heads, seq_len, masking_enabled
+        )
 
-    def forward(self, tokens, encoder_logits=None):
+    def forward(self, tokens):
         logits_norm = self.layer_norm(tokens)
-        logits = self.heads(logits_norm, encoder_logits)
+        logits = self.heads(logits_norm)
         return logits + tokens  # [32, seq_len, emb_size]
 
 
@@ -93,9 +128,18 @@ class FeedFwdBlock(nn.Module):
 
 
 class DecoderArchitecture(nn.Module):
-    def __init__(self, emb_size, heads_num):
+    def __init__(
+        self,
+        emb_size: int,
+        head_emb: int,
+        q_heads: int,
+        kv_heads: int,
+        seq_len: int,
+    ):
         super().__init__()
-        self.self_attention = MultiHeadBlock(emb_size, heads_num, masking_enabled=True)
+        self.self_attention = MultiHeadBlock(
+            emb_size, head_emb, q_heads, kv_heads, seq_len, True
+        )
         self.feed_fwd = FeedFwdBlock(emb_size)
 
     def forward(self, hidden_states):
@@ -109,7 +153,9 @@ class Decoder(nn.Module):
         super().__init__()
         self.architecture = nn.ModuleList(
             [
-                DecoderArchitecture(cfg.emb_size, cfg.heads_num)
+                DecoderArchitecture(
+                    cfg.emb_size, cfg.heads_emb, cfg.q_heads, cfg.kv_heads, cfg.seq_len
+                )
                 for _ in range(cfg.decoder_num)
             ]
         )

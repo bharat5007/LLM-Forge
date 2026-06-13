@@ -62,21 +62,21 @@ class SwiGLU(nn.Module):
 class RoPE(nn.Module):
     def __init__(self, T, C):
         super().__init__()
-        freqs = self.calculate_freq
-        self.cos = freqs.cos()
-        self.sin = freqs.sin()
+        freqs = self.calculate_freq(T, C)
+        self.register_buffer("cos", freqs.cos())
+        self.register_buffer("sin", freqs.sin())
 
     def calculate_freq(self, T, C):
         inv_freq = 1.0 / (10000 ** (torch.arange(0, C, 2) / C))
         positions = torch.arange(T)
         return torch.outer(positions, inv_freq)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x1 = x[..., ::2]
         x2 = x[..., 1::2]
 
-        out_even = x1 * self.cos - x1 * self.sin
-        out_odd = x2 * self.cos + x2 * self.sin
+        out_even = x1 * self.cos - x2 * self.sin
+        out_odd = x1 * self.sin + x2 * self.cos
         out = torch.stack((out_even, out_odd), dim=-1)
         out = out.flatten(-2)
         return out
