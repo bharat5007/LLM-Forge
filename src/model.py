@@ -5,6 +5,7 @@ import random
 from .tokenizer import Tokenizer
 from .config import ModelConfig
 from rotary_embedding_torch import RotaryEmbedding
+from .components import RMSNorm
 
 import sys
 import os
@@ -67,7 +68,7 @@ class MultiHeadAttention(nn.Module):
 class MultiHeadBlock(nn.Module):
     def __init__(self, emb_size, heads_num, masking_enabled=False):
         super().__init__()
-        self.layer_norm = nn.RMSNorm(emb_size)
+        self.layer_norm = RMSNorm(emb_size)
         self.heads = MultiHeadAttention(emb_size, heads_num, masking_enabled)
 
     def forward(self, tokens, encoder_logits=None):
@@ -79,7 +80,7 @@ class MultiHeadBlock(nn.Module):
 class FeedFwdBlock(nn.Module):
     def __init__(self, emb_size):
         super().__init__()
-        self.layer_norm = nn.RMSNorm(emb_size)
+        self.layer_norm = RMSNorm(emb_size)
         self.layer = nn.Sequential(
             nn.Linear(emb_size, 4 * emb_size),
             nn.GELU(),
@@ -118,7 +119,7 @@ class Decoder(nn.Module):
             torch.randn((cfg.vocab_size + 2, cfg.emb_size))
         )
         self.postional_enc = nn.Parameter(torch.randn((cfg.seq_len, cfg.emb_size)))
-        self.layer_norm = nn.RMSNorm(cfg.emb_size)
+        self.layer_norm = RMSNorm(cfg.emb_size)
 
     def forward(self, tokens, target=None):
         loss = None
