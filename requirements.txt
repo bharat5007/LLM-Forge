@@ -2,3 +2,5 @@ regex
 torch
 ruff
 rotary-embedding-torch
+datasets
+truststore

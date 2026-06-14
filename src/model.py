@@ -81,7 +81,9 @@ class MultiHeadAttention(nn.Module):
     ):
         super().__init__()
         self.proj = nn.Linear(emb_size, emb_size)
-        self.head = Head(emb_size, head_emb, q_heads, kv_heads, seq_len, masking_enabled)
+        self.head = Head(
+            emb_size, head_emb, q_heads, kv_heads, seq_len, masking_enabled
+        )
 
     def forward(self, x):
         logits = self.head(x)

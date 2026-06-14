@@ -1,5 +1,9 @@
 import json
 import regex as re
+from datasets import load_dataset
+import truststore
+
+truststore.inject_into_ssl()
 
 
 class Tokenizer:
@@ -118,3 +122,12 @@ class Tokenizer:
             tokenizer.vocab[idx] = tokenizer.vocab[p0] + tokenizer.vocab[p1]
         tokenizer.register_self_token()
         return tokenizer
+
+
+# ds = load_dataset("roneneldan/TinyStories", split="train") ############## Too heavy to run locally
+ds = load_dataset("roneneldan/TinyStories", split="train[:1000]")
+text = " ".join(ds["text"])
+special_tokens = {"<|endoftext|>": 50256, "<|padding|>": 50257}
+tokenizer = Tokenizer(special_tokens)
+tokenizer.training(text, 10000)
+tokenizer.save("tokenizer.json")
