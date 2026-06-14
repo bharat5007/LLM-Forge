@@ -1,0 +1,27 @@
+src/tokenizer.py
+  h_79f881d9d7bed1 4-6,127-128
+  s_60444d751bef84::t_f6175c0544a27b 133
+requirements.txt
+  h_79f881d9d7bed1 5-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "54ce5270ba0cb9e5d4885b60274be9ad42980a85",
+  "prompts": {},
+  "humans": {
+    "h_79f881d9d7bed1": {
+      "author": "bharat5007 <bharatgoyal5007@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_60444d751bef84": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "469f1c0f-9c9f-43fd-b77b-b63abcbe1efc",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "bharat5007 <bharatgoyal5007@gmail.com>"
+    }
+  }
+}
