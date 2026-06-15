@@ -5,19 +5,19 @@ from dataclasses import dataclass
 class ModelConfig:
     # Vocab and Sequence
     vocab_size: int = 50002  # vocab size
-    seq_len: int = 10  # length of sequence to be fed
+    seq_len: int = 128  # length of sequence to be fed
 
     # Architecture
     heads_num: int = 4  # number of heads in each attentition
     decoder_num: int = 6  # number of decoders
-    emb_size: int = 24  # embedding size
-    kv_heads: int = 2
-    q_heads: int = 6
-    head_emb: int = 0
+    emb_size: int = 256  # embedding size
+    kv_heads: int = 4  # number of kv heads
+    q_heads: int = 16  # number of q heads
+    head_emb: int = 0  # head embedding size
 
     # training parameters
-    batch_size: int = 1
-    epochs: int = 1
+    batch_size: int = 16
+    epochs: int = 100
 
     def __post_init__(self):
         if self.q_heads % self.kv_heads != 0:

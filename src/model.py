@@ -5,9 +5,13 @@ import random
 from tokenizer_optimized import Tokenizer
 from config import ModelConfig
 from components import RMSNorm, SwiGLU, RoPE
+from datasets import load_dataset
+import truststore
 
 import sys
 import os
+
+truststore.inject_into_ssl()
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -215,15 +219,15 @@ class Decoder(nn.Module):
 
             output, loss = self.forward(x_batch, y_batch)
             loss.backward()
-            print(f"epoch: {epoch}, loss: {loss.item():.4f}")
+            print(f"epoch: {epoch + 1}, loss: {loss.item():.4f}")
             optimizer.step()
             optimizer.zero_grad()
 
 
 tokenizer = Tokenizer.load("tokens.json")
-text = "Once upon there was a dragon which was owned by bharat the great"
+ds = load_dataset("roneneldan/TinyStories", split="train[:1000]")
+text = " ".join(ds["text"])
 tokens = tokenizer.encode(text)
-print(tokens)
 
 config = ModelConfig()
 decoder = Decoder(config)
