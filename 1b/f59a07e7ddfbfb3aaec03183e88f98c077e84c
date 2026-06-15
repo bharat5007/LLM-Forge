@@ -1,0 +1,12 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1bf59a07e7ddfbfb3aaec03183e88f98c077e84c",
+  "prompts": {},
+  "humans": {
+    "h_79f881d9d7bed1": {
+      "author": "bharat5007 <bharatgoyal5007@gmail.com>"
+    }
+  }
+}
