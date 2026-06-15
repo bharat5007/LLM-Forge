@@ -236,7 +236,7 @@ class Tokenizer:
 
 if __name__ == "__main__":
     ds = load_dataset("roneneldan/TinyStories", split="train")
-    special_tokens = {"<|endoftext|>": 50256, "<|padding|>": 50257}
+    special_tokens = {"<|endoftext|>": 50000, "<|padding|>": 50001}
     tokenizer = Tokenizer(special_tokens)
     tokenizer.training(ds["text"], 50000)
     tokenizer.save("tokens.json")

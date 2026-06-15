@@ -4,16 +4,11 @@ import torch.nn.functional as F
 import random
 from tokenizer_optimized import Tokenizer
 from config import ModelConfig
-from components import RMSNorm, SwiGLU, RoPE
+from components import RMSNorm, RoPE
 from datasets import load_dataset
 import truststore
 
-import sys
-import os
-
 truststore.inject_into_ssl()
-
-sys.path.insert(0, os.path.dirname(__file__))
 
 
 class Head(nn.Module):
@@ -58,8 +53,7 @@ class Head(nn.Module):
         logits = logits / (k.shape[-1] ** 0.5)
 
         if self.masking_enabled:
-            mask = torch.tril(torch.ones(T, T))
-            logits = logits.masked_fill(mask == 0, float("-inf"))
+            logits = torch.tril(torch.ones(T, T, device=logits.device))
 
         logits = F.softmax(logits, dim=-1)
         logits = logits @ v  # (B, q_heads, T, head_emb)
@@ -111,15 +105,25 @@ class MultiHeadBlock(nn.Module):
         return logits + tokens  # [32, seq_len, emb_size]
 
 
+class SwiGLU(nn.Module):
+    def __init__(self, in_dim):
+        super().__init__()
+        hidden_dim = 4 * in_dim
+        self.gate_proj = nn.Linear(in_dim, hidden_dim)
+        self.up_proj = nn.Linear(in_dim, hidden_dim)
+        self.down_proj = nn.Linear(hidden_dim, in_dim)
+
+    def forward(self, x: torch.Tensor):
+        gate = self.gate_proj(x)
+        output = gate * torch.sigmoid(gate)
+        return self.down_proj(output * self.up_proj(x))
+
+
 class FeedFwdBlock(nn.Module):
     def __init__(self, emb_size):
         super().__init__()
         self.layer_norm = RMSNorm(emb_size)
-        self.layer = nn.Sequential(
-            nn.Linear(emb_size, 4 * emb_size),
-            SwiGLU(4 * emb_size),
-            nn.Linear(4 * emb_size, emb_size),
-        )
+        self.layer = SwiGLU(emb_size)
 
     def forward(self, tokens):
         logits_norm = self.layer_norm(tokens)
@@ -193,7 +197,7 @@ class Decoder(nn.Module):
         # we have to make sure len(tokens) % self.seq_len = 0
         if len(tokens) % (cfg.seq_len + 1) != 0:
             pad = cfg.seq_len + 1 - len(tokens) % (cfg.seq_len + 1)
-            tokens.extend([0] * pad)
+            tokens.extend([50257] * pad)
 
         # tokens ko torch ma convert kr rhe ha
         tokens = torch.tensor(tokens)

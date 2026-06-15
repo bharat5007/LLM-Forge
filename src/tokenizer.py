@@ -127,7 +127,7 @@ class Tokenizer:
 # ds = load_dataset("roneneldan/TinyStories", split="train") ############## Too heavy to run locally
 ds = load_dataset("roneneldan/TinyStories", split="train[:100000]")
 text = " ".join(ds["text"])
-special_tokens = {"<|endoftext|>": 50256, "<|padding|>": 50257}
+special_tokens = {"<|endoftext|>": 50000, "<|padding|>": 50001}
 tokenizer = Tokenizer(special_tokens)
 tokenizer.training(text, 50000)
 tokenizer.save("tokenizer_5000_tine_stories.json")
