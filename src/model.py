@@ -2,20 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
-from .tokenizer import Tokenizer
-from .config import ModelConfig
-from .components import RMSNorm, SwiGLU, RoPE
+from tokenizer_optimized import Tokenizer
+from config import ModelConfig
+from components import RMSNorm, SwiGLU, RoPE
 
 import sys
 import os
 
-sys.path.insert(0, os.path.abspath(".."))
-
-text = ""
-
-
-tokenizer = Tokenizer.load("../tokenizer.json")
-tokens = tokenizer.encode(text)
+sys.path.insert(0, os.path.dirname(__file__))
 
 
 class Head(nn.Module):
@@ -119,7 +113,7 @@ class FeedFwdBlock(nn.Module):
         self.layer_norm = RMSNorm(emb_size)
         self.layer = nn.Sequential(
             nn.Linear(emb_size, 4 * emb_size),
-            SwiGLU(),
+            SwiGLU(4 * emb_size),
             nn.Linear(4 * emb_size, emb_size),
         )
 
@@ -161,7 +155,7 @@ class Decoder(nn.Module):
                 for _ in range(cfg.decoder_num)
             ]
         )
-        self.linear = SwiGLU(cfg.emb_size, cfg.vocab_size)
+        self.linear = nn.Linear(cfg.emb_size, cfg.vocab_size)
         self.look_up_table = nn.Parameter(
             torch.randn((cfg.vocab_size + 2, cfg.emb_size))
         )
@@ -224,3 +218,13 @@ class Decoder(nn.Module):
             print(f"epoch: {epoch}, loss: {loss.item():.4f}")
             optimizer.step()
             optimizer.zero_grad()
+
+
+tokenizer = Tokenizer.load("tokens.json")
+text = "Once upon there was a dragon which was owned by bharat the great"
+tokens = tokenizer.encode(text)
+print(tokens)
+
+config = ModelConfig()
+decoder = Decoder(config)
+decoder.fit(tokens, config)

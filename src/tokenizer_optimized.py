@@ -109,7 +109,7 @@ class Tokenizer:
         print("Pretokenizing (multiprocessing)...")
         num_workers = num_workers or max(1, mp.cpu_count() - 1)
         batch_size = max(1, len(texts) // (num_workers * 8))
-        batches = [texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
+        batches = [texts[i : i + batch_size] for i in range(0, len(texts), batch_size)]
 
         chunk_counter = Counter()
         with mp.Pool(num_workers) as pool:
@@ -118,8 +118,10 @@ class Tokenizer:
 
         chunk_tokens = [list(k) for k in chunk_counter.keys()]
         chunk_freqs = list(chunk_counter.values())
-        print(f"Unique pretokens: {len(chunk_tokens)} "
-              f"(from {sum(chunk_freqs)} total occurrences)")
+        print(
+            f"Unique pretokens: {len(chunk_tokens)} "
+            f"(from {sum(chunk_freqs)} total occurrences)"
+        )
 
         # -----------------------------------------------------------
         # Step 2: Initial pair counts + reverse index (pair -> chunks)
@@ -186,8 +188,10 @@ class Tokenizer:
                 )
 
             if i % log_every == 0:
-                print(f"merge {i}/{num_merges}: {best_pair} -> {new_idx} "
-                      f"(count={best_count})")
+                print(
+                    f"merge {i}/{num_merges}: {best_pair} -> {new_idx} "
+                    f"(count={best_count})"
+                )
 
         # -----------------------------------------------------------
         # Step 4: Build vocab
@@ -235,4 +239,4 @@ if __name__ == "__main__":
     special_tokens = {"<|endoftext|>": 50256, "<|padding|>": 50257}
     tokenizer = Tokenizer(special_tokens)
     tokenizer.training(ds["text"], 50000)
-    tokenizer.save("tokenizer.json")
+    tokenizer.save("tokens.json")
