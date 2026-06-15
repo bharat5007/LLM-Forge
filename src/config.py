@@ -16,8 +16,8 @@ class ModelConfig:
     heads_emb: int = 0  # head embedding size
 
     # training parameters
-    batch_size: int = 16
-    epochs: int = 100
+    batch_size: int = 32
+    epochs: int = 30000
 
     def __post_init__(self):
         if self.q_heads % self.kv_heads != 0:

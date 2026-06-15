@@ -2,13 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
-from tokenizer_optimized import Tokenizer
 from config import ModelConfig
 from components import RMSNorm, RoPE
-from datasets import load_dataset
-import truststore
-
-truststore.inject_into_ssl()
 
 
 class Head(nn.Module):
@@ -197,7 +192,7 @@ class Decoder(nn.Module):
         # we have to make sure len(tokens) % self.seq_len = 0
         if len(tokens) % (cfg.seq_len + 1) != 0:
             pad = cfg.seq_len + 1 - len(tokens) % (cfg.seq_len + 1)
-            tokens.extend([50257] * pad)
+            tokens.extend([50001] * pad)
 
         # tokens ko torch ma convert kr rhe ha
         tokens = torch.tensor(tokens)
@@ -226,13 +221,3 @@ class Decoder(nn.Module):
             print(f"epoch: {epoch + 1}, loss: {loss.item():.4f}")
             optimizer.step()
             optimizer.zero_grad()
-
-
-tokenizer = Tokenizer.load("tokens.json")
-ds = load_dataset("roneneldan/TinyStories", split="train[:1000]")
-text = " ".join(ds["text"])
-tokens = tokenizer.encode(text)
-
-config = ModelConfig()
-decoder = Decoder(config)
-decoder.fit(tokens, config)
