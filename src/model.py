@@ -5,6 +5,15 @@ import random
 from config import ModelConfig
 from components import RMSNorm, RoPE
 
+device = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps"
+    if torch.backends.mps.is_available()
+    else "cpu"
+)
+print(f"Using device: {device}")
+
 
 class Head(nn.Module):
     def __init__(
@@ -17,7 +26,7 @@ class Head(nn.Module):
         masking_enabled: bool = False,
     ):
         super().__init__()
-        self.rope = RoPE(seq_len, head_emb)
+        self.rope = RoPE(seq_len, head_emb, device)
         self.q_heads = q_heads
         self.kv_heads = kv_heads
         self.head_emb = head_emb
@@ -90,7 +99,7 @@ class MultiHeadBlock(nn.Module):
         masking_enabled: bool = False,
     ):
         super().__init__()
-        self.layer_norm = RMSNorm(emb_size)
+        self.layer_norm = RMSNorm(emb_size, device)
         self.heads = MultiHeadAttention(
             emb_size, head_emb, q_heads, kv_heads, seq_len, masking_enabled
         )
@@ -118,7 +127,7 @@ class SwiGLU(nn.Module):
 class FeedFwdBlock(nn.Module):
     def __init__(self, emb_size):
         super().__init__()
-        self.layer_norm = RMSNorm(emb_size)
+        self.layer_norm = RMSNorm(emb_size, device)
         self.layer = SwiGLU(emb_size)
 
     def forward(self, tokens):
@@ -161,17 +170,22 @@ class Decoder(nn.Module):
         )
         self.linear = nn.Linear(cfg.emb_size, cfg.vocab_size)
         self.look_up_table = nn.Parameter(
-            torch.randn((cfg.vocab_size + 2, cfg.emb_size))
+            torch.randn((cfg.vocab_size + 2, cfg.emb_size)).to(device)
         )
-        self.postional_enc = nn.Parameter(torch.randn((cfg.seq_len, cfg.emb_size)))
-        self.layer_norm = RMSNorm(cfg.emb_size)
+        self.postional_enc = nn.Parameter(
+            torch.randn((cfg.seq_len, cfg.emb_size)).to(device)
+        )
+        self.layer_norm = RMSNorm(cfg.emb_size, device)
 
     def forward(self, tokens, target=None):
         loss = None
         B, T = tokens.shape  # [32, seq_len]
 
         # Encoding -> tokenizer + postional
-        hidden_states = self.look_up_table[tokens] + self.postional_enc[torch.arange(T)]
+        hidden_states = (
+            self.look_up_table[tokens]
+            + self.postional_enc[torch.arange(T, device=device)]
+        )
 
         for decoder in self.architecture:
             hidden_states = decoder(hidden_states)
@@ -180,7 +194,7 @@ class Decoder(nn.Module):
         logits = self.linear(hidden_states)  # [32, seq_len, vocab_size]
 
         if target is not None:
-            target = torch.tensor(target)
+            target = target.to(device)
             B, T, C = logits.shape
             loss = F.cross_entropy(logits.view(B * T, C), target.view(B * T))
 
@@ -196,7 +210,7 @@ class Decoder(nn.Module):
             tokens.extend([50001] * pad)
 
         # tokens ko torch ma convert kr rhe ha
-        tokens = torch.tensor(tokens)
+        tokens = torch.tensor(tokens, device=device)
 
         # converting it into a matrix of shape [n, seq_len+1]
         tokens = tokens.view(-1, cfg.seq_len + 1)  # [n, seq_len + 1]
@@ -207,7 +221,7 @@ class Decoder(nn.Module):
 
         for epoch in range(cfg.epochs):
             # will generate a random permutation of length x[0], for eg. [5,2,3,0,1,4]
-            perm = torch.randperm(x_chunks.size(0))
+            perm = torch.randperm(x_chunks.size(0), device=device)
 
             # mixing up x and y using same permutation
             x = x_chunks[perm]
@@ -219,6 +233,14 @@ class Decoder(nn.Module):
 
             output, loss = self.forward(x_batch, y_batch)
             loss.backward()
-            print(f"epoch: {epoch + 1}, loss: {loss.item():.4f}")
             optimizer.step()
             optimizer.zero_grad()
+            print(f"epoch: {epoch + 1}, loss: {loss.item():.4f}")
+            if epoch % 100 == 0:
+                torch.save(
+                    {
+                        "model_state": self.state_dict(),
+                        "config": cfg,
+                    },
+                    "checkpoint.pt",
+                )

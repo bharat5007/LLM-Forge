@@ -3,9 +3,9 @@ import torch.nn as nn
 
 
 class RMSNorm(nn.Module):
-    def __init__(self, emb_size):
+    def __init__(self, emb_size, device):
         super().__init__()
-        self.gamma = nn.Parameter(torch.ones(emb_size))
+        self.gamma = nn.Parameter(torch.ones(emb_size).to(device))
         self.emb_size = emb_size
 
     def forward(self, x: torch.Tensor, upsilon: float = 1e-10):
@@ -48,15 +48,15 @@ class RMSNorm(nn.Module):
 
 
 class RoPE(nn.Module):
-    def __init__(self, T, C):
+    def __init__(self, T, C, device):
         super().__init__()
-        freqs = self.calculate_freq(T, C)
+        freqs = self.calculate_freq(T, C, device)
         self.register_buffer("cos", freqs.cos())
         self.register_buffer("sin", freqs.sin())
 
-    def calculate_freq(self, T, C):
-        inv_freq = 1.0 / (10000 ** (torch.arange(0, C, 2) / C))
-        positions = torch.arange(T)
+    def calculate_freq(self, T, C, device):
+        inv_freq = 1.0 / (10000 ** (torch.arange(0, C, 2, device=device) / C))
+        positions = torch.arange(T, device=device)
         return torch.outer(positions, inv_freq)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

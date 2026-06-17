@@ -7,6 +7,14 @@ import torch
 import truststore
 
 truststore.inject_into_ssl()
+device = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps"
+    if torch.backends.mps.is_available()
+    else "cpu"
+)
+print(f"Using device: {device}")
 
 tokenizer = Tokenizer.load("tokens.json")
 ds = load_dataset("roneneldan/TinyStories", split="train[:1000]")
@@ -14,7 +22,7 @@ text = " ".join(ds["text"])
 tokens = tokenizer.encode(text)
 
 config = ModelConfig()
-decoder = Decoder(config)
+decoder = Decoder(config).to(device)
 decoder.fit(tokens, config)
 torch.save(
     {
