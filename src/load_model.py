@@ -1,5 +1,6 @@
 import torch
 from model import Decoder
+from config import ModelConfig
 from tokenizer_optimized import Tokenizer
 
 device = (
@@ -33,15 +34,15 @@ def generate(
     prompt: str, max_new_tokens: int = 500, temperature: float = 0.7, top_k: int = 50
 ) -> str:
     tokens = tokenizer.encode(prompt)
-    pad_id = tokenizer.special_tokens.get("<|padding|>", 0)
 
     for _ in range(max_new_tokens):
-        context = tokens[-config.seq_len :]
+        if len(tokens) < config.seq_len:
+            pad_id = tokenizer.special_tokens.get("<|padding|>", 0)
+            padding = (config.seq_len - len(tokens)) * [pad_id]
+            tokens = tokens + padding
 
-        # pad to seq_len
-        pad_len = config.seq_len - len(context)
-        padded = [pad_id] * pad_len + context
-        x = torch.tensor(padded).unsqueeze(0).to(device)
+        context = tokens[-config.seq_len :]
+        x = torch.tensor(context).unsqueeze(0).to(device)
 
         with torch.no_grad():
             logits, _ = decoder(x)  # [1, T, vocab_size]
@@ -52,7 +53,7 @@ def generate(
         if next_token == tokenizer.special_tokens.get("<|endoftext|>"):
             break
 
-    return tokenizer.decode(tokens[len(tokenizer.encode(prompt)) :])
+    return tokenizer.decode(tokens[config.seq_len :])
 
 
 while True:
