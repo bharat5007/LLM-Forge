@@ -48,7 +48,8 @@ class Head(nn.Module):
         logits = logits / (k.shape[-1] ** 0.5)
 
         if self.masking_enabled:
-            logits = torch.tril(torch.ones(T, T, device=logits.device))
+            mask = torch.tril(torch.ones(T, T, device=logits.device))
+            logits = logits.masked_fill(mask == 0, float("-inf"))
 
         logits = F.softmax(logits, dim=-1)
         logits = logits @ v  # (B, q_heads, T, head_emb)
