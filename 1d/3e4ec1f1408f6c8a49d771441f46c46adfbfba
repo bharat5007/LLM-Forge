@@ -1,0 +1,32 @@
+src/load_model.py
+  s_2b57e6bd4f6a2d::t_54068ad4b78079 10
+  s_2b57e6bd4f6a2d::t_77f626bf3f45cb 5-6
+  h_79f881d9d7bed1 1-4,7-9,11-15,26,28-36,38-41,43-55
+  s_2b57e6bd4f6a2d::t_dee0de9c917cd5 16-25,27,42
+  s_2b57e6bd4f6a2d::t_db7385236133a2 37
+.gitignore
+  h_79f881d9d7bed1 4
+src/model.py
+  h_79f881d9d7bed1 51-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1d3e4ec1f1408f6c8a49d771441f46c46adfbfba",
+  "prompts": {},
+  "humans": {
+    "h_79f881d9d7bed1": {
+      "author": "bharat5007 <bharatgoyal5007@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_2b57e6bd4f6a2d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bace91ad-7c82-48af-8e46-99af874a2663",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "bharat5007 <bharatgoyal5007@gmail.com>"
+    }
+  }
+}
