@@ -84,16 +84,35 @@ The trained tokenizer is saved/loaded as JSON (`tokens.json`).
 
 ## Training
 
-**Dataset**: `roneneldan/TinyStories` from HuggingFace Datasets.
+**Dataset**: `roneneldan/TinyStories` from HuggingFace Datasets, 100,000 stories.  
+**Hardware**: Google Colab, NVIDIA L4 GPU.
 
-Training is run from `src/train.py` (1,000 stories) or the development monolith `src/rough.py` (100,000 stories). The `checkpoint.pt` in this repo was trained using the larger split. Training text is encoded with the pretrained tokenizer, padded to a multiple of `seq_len + 1`, then sliced into `(x, y)` chunk pairs for next-token prediction.
+Training text is encoded with the pretrained tokenizer, padded to a multiple of `seq_len + 1`, then sliced into `(x, y)` chunk pairs for next-token prediction.
 
 **Training loop** (`src/model.py:Decoder.fit`):
 - Autoregressive next-token prediction, cross-entropy loss over all positions
-- Each epoch: randomly permute all chunks, pick one random batch of 32 — so "30,000 epochs" means 30,000 gradient steps (not 30,000 passes over the full dataset)
+- Each "epoch" is one randomly sampled mini-batch — 30,000 steps total, not 30,000 full passes
 - AdamW, lr=1e-3, no scheduler
 - Checkpoint saved to `checkpoint.pt` every 100 steps
-- Device auto-detected: CUDA → MPS → CPU
+
+---
+
+## Scaling Experiment
+
+Two model sizes were trained on the same dataset and compared qualitatively:
+
+| Config | `emb_size` | `decoder_num` | `q_heads` / `kv_heads` | `seq_len` | Params |
+|--------|-----------|--------------|------------------------|-----------|--------|
+| Small  | 256       | 6            | 16 / 4                 | 128       | ~31M   |
+| Large  | 576       | 10           | 9 / 3                  | 256       | ~107M  |
+
+The large model shows clear qualitative improvements over the small one at the same number of training steps:
+
+- **Narrative structure**: the small model often restarts mid-generation (repeating "Once upon a time" partway through), while the large model maintains a single narrative arc across multiple paragraphs.
+- **Grammar and coherence**: sentences in the large model's output use correct cause-and-effect structure ("She was scared, but she remembered the words and decided to keep going") and consistent character naming across paragraphs — neither of which appeared reliably in the small model.
+- **Context tracking**: the large model's longer `seq_len` (256 vs 128) lets it carry character state further, which visibly reduces contradictions within a single story.
+
+These differences appear to come from both the larger model capacity and the doubled sequence length, though they are not ablated separately.
 
 ---
 
