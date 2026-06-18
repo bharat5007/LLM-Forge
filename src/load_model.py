@@ -31,9 +31,15 @@ def sample(logits: torch.Tensor, temperature, top_k) -> int:
 
 
 def generate(
-    prompt: str, max_new_tokens: int = 500, temperature: float = 0.7, top_k: int = 50
+    prompt: str,
+    max_new_tokens: int = 500,
+    min_new_tokens: int = 80,
+    temperature: float = 0.7,
+    top_k: int = 50,
 ) -> str:
     tokens = tokenizer.encode(prompt)
+    eos_id = tokenizer.special_tokens.get("<|endoftext|>")
+    generated = 0
 
     for _ in range(max_new_tokens):
         if len(tokens) < config.seq_len:
@@ -49,11 +55,13 @@ def generate(
 
         next_token = sample(logits[0, -1, :], temperature=temperature, top_k=top_k)
         tokens.append(next_token)
+        generated += 1
 
-        if next_token == tokenizer.special_tokens.get("<|endoftext|>"):
+        if next_token == eos_id and generated >= min_new_tokens:
             break
 
-    return tokenizer.decode(tokens[config.seq_len :])
+    output = tokenizer.decode(tokens[config.seq_len :])
+    return output.replace("<|endoftext|>", "").strip()
 
 
 while True:

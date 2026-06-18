@@ -5,14 +5,14 @@ from dataclasses import dataclass
 class ModelConfig:
     # Vocab and Sequence
     vocab_size: int = 50002  # vocab size
-    seq_len: int = 128  # length of sequence to be fed
+    seq_len: int = 256  # length of sequence to be fed
 
     # Architecture
     heads_num: int = 4  # number of heads in each attentition
-    decoder_num: int = 6  # number of decoders
-    emb_size: int = 256  # embedding size
-    kv_heads: int = 4  # number of kv heads
-    q_heads: int = 16  # number of q heads
+    decoder_num: int = 10  # number of decoders
+    emb_size: int = 576  # embedding size
+    kv_heads: int = 3  # number of kv heads
+    q_heads: int = 9  # number of q heads
     heads_emb: int = 0  # head embedding size
 
     # training parameters
