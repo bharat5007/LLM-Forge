@@ -32,12 +32,12 @@ The decoder block follows the LLaMA-style pattern (pre-norm, RoPE, GQA, SwiGLU) 
 | Parameter | Value |
 |-----------|-------|
 | `vocab_size` | 50002 |
-| `seq_len` | 128 |
-| `emb_size` | 256 |
-| `decoder_num` | 6 |
-| `q_heads` | 16 |
-| `kv_heads` | 4 |
-| `heads_emb` (derived) | 16 |
+| `seq_len` | 256 |
+| `emb_size` | 576 |
+| `decoder_num` | 10 |
+| `q_heads` | 9 |
+| `kv_heads` | 3 |
+| `heads_emb` (derived) | 64 |
 | `batch_size` | 32 |
 | `epochs` (steps) | 30000 |
 
@@ -47,14 +47,14 @@ Computed directly from the config above:
 
 | Component | Params |
 |-----------|--------|
-| Token embedding (`vocab_size + 2, emb_size`) | 12,801,024 |
-| Positional encoding (learned, `seq_len × emb_size`) | 32,768 |
-| 6 × decoder layer (attn + FFN each) | 5,722,368 |
-| Final RMSNorm | 256 |
-| LM head (`Linear(emb_size, vocab_size)`) | 12,850,514 |
-| **Total** | **~31.4M** |
+| Token embedding (`vocab_size + 2, emb_size`) | 28,802,304 |
+| Positional encoding (learned, `seq_len × emb_size`) | 147,456 |
+| 10 × decoder layer (attn + FFN each) | 48,739,200 |
+| Final RMSNorm | 576 |
+| LM head (`Linear(emb_size, vocab_size)`) | 28,851,154 |
+| **Total** | **~106.5M** |
 
-82% of parameters live in the embedding table and LM head — a consequence of the large vocab (50k tokens) relative to the small model dimension (256). The actual transformer computation layers account for only ~5.7M parameters. Tied embeddings would roughly halve the total count; this is flagged as future work.
+54% of parameters are in the embedding table and LM head, with the remaining 46% (~48.7M) in the transformer layers themselves — a much healthier ratio than the smaller 31M config where the vocab layers dominated at 82%. Tied embeddings would still reduce this further and are flagged as future work.
 
 ---
 
